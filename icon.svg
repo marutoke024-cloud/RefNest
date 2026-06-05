@@ -1,0 +1,37 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#262a33"/>
+      <stop offset="0.55" stop-color="#1b1e25"/>
+      <stop offset="1" stop-color="#101218"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8ab0ff"/>
+      <stop offset="0.5" stop-color="#5b8cff"/>
+      <stop offset="1" stop-color="#3f6ad6"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b8cff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#5b8cff" stop-opacity="0.06"/>
+    </linearGradient>
+  </defs>
+
+  <!-- base squircle -->
+  <rect x="0" y="0" width="512" height="512" rx="116" ry="116" fill="url(#bg)"/>
+  <rect x="6" y="6" width="500" height="500" rx="112" ry="112" fill="none" stroke="url(#ring)" stroke-width="6"/>
+
+  <!-- accent baseline -->
+  <rect x="150" y="372" width="212" height="14" rx="7" fill="url(#ink)" opacity="0.85"/>
+
+  <!-- RN as stroked vector letters (font-independent) -->
+  <g fill="none" stroke="url(#ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" transform="translate(-8,-4)">
+    <!-- R -->
+    <path d="M152 160 V348"/>
+    <path d="M152 160 H206 C252 160 252 256 206 256 H152"/>
+    <path d="M196 256 L250 348"/>
+    <!-- N -->
+    <path d="M300 348 V160"/>
+    <path d="M300 160 L398 348"/>
+    <path d="M398 348 V160"/>
+  </g>
+</svg>
