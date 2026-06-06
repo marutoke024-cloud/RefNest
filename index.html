@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>RefNest</title>
+<meta name="theme-color" content="#15171c">
+<meta name="description" content="イラスト資料管理アプリ - ギャラリーとPureRef風ボードで参照画像を整理">
+<!-- iOS / standalone -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RefNest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<!-- handwriting webfont (Google Fonts) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Kurenaido&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#15171c; --panel:#1d2027; --panel2:#262a33; --line:#343a45;
+    --text:#e6e8ec; --muted:#9aa1ad; --accent:#5b8cff; --accent2:#3a6bd6;
+    --danger:#e0524a; --ok:#3ec98a; --folder:#e8b558;
+    --hand:"Klee One","Zen Kurenaido","Yu Gothic",Meiryo,sans-serif;
+    --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+    --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;
+    font-size:14px;display:flex;flex-direction:column;height:100vh;height:100dvh;
+  }
+  button{font-family:inherit;cursor:pointer}
+  header{
+    display:flex;align-items:center;gap:10px;
+    padding:calc(8px + var(--safe-t)) calc(14px + var(--safe-r)) 8px calc(14px + var(--safe-l));
+    background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;z-index:30;flex-wrap:wrap;
+  }
+  body.header-hidden header{display:none}
+  .logo{font-weight:700;letter-spacing:.5px;font-size:15px;margin-right:6px;white-space:nowrap}
+  .logo span{color:var(--accent)}
+  .seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;border:none;color:var(--muted);padding:8px 16px;font-size:13px;font-weight:600}
+  .seg button.active{background:var(--accent);color:#fff}
+  .btn{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    padding:8px 13px;border-radius:8px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent2)}
+  .btn.danger{color:var(--danger);border-color:transparent}
+  .btn.danger:hover{border-color:var(--danger)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .spacer{flex:1}
+  .hint{color:var(--muted);font-size:12px}
+  select.board-select{
+    background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600;max-width:180px;min-height:40px;
+  }
+  #showHeaderBtn{
+    position:fixed;top:calc(8px + var(--safe-t));left:calc(10px + var(--safe-l));z-index:45;display:none;
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;box-shadow:0 3px 10px rgba(0,0,0,.4);min-height:40px;
+  }
+  body.header-hidden #showHeaderBtn{display:block}
+
+  main{flex:1;position:relative;overflow:hidden}
+  .view{position:absolute;inset:0;display:none}
+  .view.active{display:block}
+
+  /* ---- Gallery ---- */
+  #galleryView{
+    overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;
+    padding:14px 18px calc(34px + var(--safe-b));display:flex;flex-direction:column;
+  }
+  .gal-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .crumbs{display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:13px}
+  .crumb{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    padding:7px 12px;border-radius:7px;cursor:pointer;font-weight:600;min-height:36px;display:flex;align-items:center;
+  }
+  .crumb:hover{border-color:var(--accent)}
+  .crumb.drop{border-color:var(--ok);background:rgba(62,201,138,.15)}
+  .crumb-sep{color:var(--muted)}
+  .gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
+  .folder-card{
+    background:var(--panel);border:2px solid var(--line);border-radius:12px;overflow:hidden;
+    display:flex;flex-direction:column;cursor:pointer;transition:border-color .12s,background .12s;
+  }
+  .folder-card:hover{border-color:var(--accent)}
+  .folder-card.drop{border-color:var(--ok);background:rgba(62,201,138,.12)}
+  .folder-card .ficon{font-size:46px;text-align:center;padding:22px 0 8px;color:var(--folder)}
+  .folder-card .fmeta{display:flex;align-items:center;gap:4px;padding:6px 8px 8px}
+  .folder-card .fname{flex:1;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card{
+    background:var(--panel);border:2px solid var(--line);border-radius:12px;overflow:hidden;
+    transition:border-color .12s, transform .12s;position:relative;
+  }
+  .card.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,140,255,.25)}
+  .card.dragging{opacity:.4}
+  .card .imgwrap{position:relative;width:100%;aspect-ratio:1/1;background:#0d0f13;cursor:pointer;overflow:hidden}
+  .card .imgwrap img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+  .card .badge{
+    position:absolute;top:8px;left:8px;background:rgba(91,140,255,.92);color:#fff;
+    width:26px;height:26px;border-radius:50%;display:none;align-items:center;justify-content:center;font-size:12px;font-weight:700;z-index:5;
+  }
+  .card.selected .badge{display:flex}
+  .card .cmt-count{
+    position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:#fff;
+    border-radius:12px;padding:3px 9px;font-size:11px;font-weight:600;z-index:5;
+  }
+  .card .meta{display:flex;align-items:center;gap:6px;padding:6px 8px}
+  .card .meta .name{flex:1;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .iconbtn{background:transparent;border:none;color:var(--muted);font-size:13px;padding:8px;border-radius:6px;min-width:40px;min-height:40px}
+  .iconbtn:hover{background:var(--panel2);color:var(--text)}
+  .iconbtn.del:hover{color:var(--danger)}
+  .empty{text-align:center;color:var(--muted);margin-top:10vh}
+  .empty .big{font-size:46px;margin-bottom:12px;opacity:.5}
+
+  /* ---- Board ---- */
+  #boardView{background:radial-gradient(circle at center, #1a1d24 0%, #121419 100%);touch-action:none;cursor:grab}
+  #boardView.panning{cursor:grabbing}
+  #boardCanvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+  .board-item{position:absolute;top:0;left:0;user-select:none}
+  .board-item .img-box{position:absolute;inset:0}
+  .board-item .img-box img{display:block;width:100%;height:100%;object-fit:fill;
+    box-shadow:0 4px 20px rgba(0,0,0,.5);border-radius:4px;pointer-events:none}
+  .board-item.sel{outline:2px solid var(--accent);outline-offset:2px}
+  .board-item .handle{
+    position:absolute;right:-9px;bottom:-9px;width:24px;height:24px;background:var(--accent);
+    border:3px solid #fff;border-radius:50%;cursor:nwse-resize;display:none;z-index:6;
+  }
+  .board-item.sel .handle{display:block}
+  .board-item .item-toolbar{position:absolute;left:0;top:-40px;display:none;gap:5px;flex-wrap:nowrap}
+  .board-item.sel .item-toolbar{display:flex}
+  .item-toolbar button{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:7px;
+    font-size:12px;padding:8px 9px;font-weight:600;white-space:nowrap;min-height:40px;
+  }
+  .item-toolbar button:hover{border-color:var(--accent)}
+  .board-toolbar{
+    position:fixed;left:calc(14px + var(--safe-l));bottom:calc(14px + var(--safe-b));
+    display:flex;gap:8px;background:var(--panel);border:1px solid var(--line);
+    padding:9px 11px;border-radius:14px;z-index:40;box-shadow:0 6px 20px rgba(0,0,0,.4);flex-wrap:wrap;max-width:calc(100vw - 28px);
+  }
+  .board-toolbar .btn{min-height:44px;min-width:44px}
+  .board-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;pointer-events:none;padding:0 24px}
+
+  /* ---- Speech bubble (hand-drawn hexagon + integrated tail) ---- */
+  .bub-shape{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:2}
+  .hbub{position:absolute;transform:translate(-50%,-100%);z-index:6}
+  .hbub-text{
+    font-family:var(--hand);font-weight:600;color:#ffffff;font-size:15px;line-height:1.5;letter-spacing:.3px;
+    text-shadow:0 1px 2px rgba(0,0,0,.45);
+    padding:11px 16px;min-width:34px;max-width:220px;display:inline-block;white-space:pre-wrap;word-break:break-word;
+    background:transparent;border:none;outline:none;position:relative;z-index:2;text-align:center;
+  }
+  .hbub-text.empty:before{content:"コメント...";color:rgba(255,255,255,.38)}
+  .hbub-text{user-select:none;cursor:move}
+  .hbub-text[contenteditable="true"]{user-select:text;cursor:text}
+  .hbub.mini,.hbub.mini *{pointer-events:none}
+  .hbub.mini{z-index:3}
+  .hbub.mini .hbub-text{font-size:9px;line-height:1.3;padding:3px 7px;max-width:92px}
+  .hbub-grip{display:none}  /* move handle hidden - drag the bubble body instead */
+  .hbub-del{
+    position:absolute;right:-13px;top:-17px;width:28px;height:28px;border-radius:8px;background:var(--panel2);
+    border:1px solid var(--line);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;z-index:4;cursor:pointer;
+  }
+  .hbub-del:hover{background:var(--danger)}
+  /* tail tip handle is invisible but stays draggable (sits on the tail tip) */
+  .tip-handle{
+    position:absolute;width:26px;height:26px;border-radius:50%;background:transparent;
+    border:none;box-shadow:none;transform:translate(-50%,-50%);cursor:move;z-index:7;touch-action:none;
+  }
+
+  /* ---- Modal ---- */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+  .modal-bg.open{display:flex}
+  .modal{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(900px,96vw);max-height:92vh;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .modal-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .modal-head h3{margin:0;font-size:15px;flex:1}
+  .modal-body{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:30px 16px 16px;display:flex;justify-content:center;align-items:flex-start;background:#0d0f13}
+  .editor-stage{position:relative;display:inline-block;max-width:100%}
+  .editor-stage img#editorImg{max-width:100%;max-height:66vh;display:block;border-radius:6px}
+  .modal-foot{padding:10px 16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+  .toast{
+    position:fixed;bottom:calc(20px + var(--safe-b));right:20px;background:var(--panel2);border:1px solid var(--line);
+    color:var(--text);padding:11px 16px;border-radius:10px;z-index:200;opacity:0;transform:translateY(10px);
+    transition:.25s;pointer-events:none;font-size:13px;
+  }
+  .toast.show{opacity:1;transform:translateY(0)}
+  input[type=file]{display:none}
+
+  /* ---- Mobile / tablet adjustments ---- */
+  @media (max-width:768px){
+    body{font-size:15px}
+    header{gap:8px;padding-top:calc(7px + var(--safe-t))}
+    .logo{font-size:16px;width:100%;margin-bottom:2px}
+    .btn{padding:10px 13px;min-height:44px}
+    .seg button{padding:11px 16px;min-height:44px}
+    #galCtrls,#boardCtrls{width:100%}
+    #galCtrls .btn,#boardCtrls .btn{flex:1 1 auto}
+    .board-select{flex:1 1 auto;max-width:none;min-height:44px}
+    .gal-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+    #galleryView{padding:12px 12px calc(30px + var(--safe-b))}
+    .iconbtn{min-width:44px;min-height:44px}
+    .item-toolbar button{min-height:44px;font-size:12px;padding:9px 10px}
+    .board-toolbar{padding:10px;gap:7px}
+  }
+  @media (pointer:coarse){
+    .tip-handle{width:28px;height:28px}
+    .board-item .handle{width:28px;height:28px}
+    .hbub-grip{min-width:56px;height:40px;font-size:18px}
+    .hbub-del{width:40px;height:40px;font-size:14px;top:-44px}
+    .hbub-grip{top:-46px}
+  }
+</style>
+</head>
+<body>
+<!-- hand-drawn roughen filter used by speech bubbles -->
+<svg width="0" height="0" aria-hidden="true" style="position:absolute;pointer-events:none">
+  <defs>
+    <filter id="rnRough" x="-30%" y="-30%" width="160%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.013 0.016" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<button id="showHeaderBtn" onclick="App.toggleHeader()">▼ メニューを表示</button>
+<header>
+  <div class="logo">Ref<span>Nest</span></div>
+  <div class="seg">
+    <button id="tabGallery" class="active" onclick="App.setView('gallery')">ギャラリー</button>
+    <button id="tabBoard" onclick="App.setView('board')">ボード</button>
+  </div>
+
+  <div id="galCtrls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="btn primary" onclick="document.getElementById('fileInput').click()">＋ 画像を追加</button>
+    <button class="btn" onclick="App.newFolder()">📁 フォルダ作成</button>
+    <span class="hint" id="selInfo">0枚選択中</span>
+    <button class="btn" onclick="App.clearSelection()">選択解除</button>
+    <button class="btn primary" id="openBoardBtn" onclick="App.openSelectedInBoard()">選択をボードで開く →</button>
+  </div>
+
+  <div id="boardCtrls" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+    <select class="board-select" id="boardSelect" onchange="App.switchBoard(this.value)"></select>
+    <button class="btn" onclick="App.newBoard()">＋ 新規ボード</button>
+    <button class="btn" onclick="App.renameBoard()">名称変更</button>
+    <button class="btn danger" onclick="App.deleteBoard()">削除</button>
+  </div>
+
+  <div class="spacer"></div>
+  <button class="btn" onclick="App.toggleHeader()">▲ 隠す</button>
+  <button class="btn danger" onclick="App.resetAll()">全データ初期化</button>
+  <input type="file" id="fileInput" accept="image/*" multiple onchange="App.onUpload(event)">
+</header>
+
+<main>
+  <section id="galleryView" class="view active">
+    <div class="gal-bar">
+      <div class="crumbs" id="crumbs"></div>
+    </div>
+    <div id="galGrid" class="gal-grid"></div>
+    <div id="galEmpty" class="empty" style="display:none">
+      <div class="big">🖼️</div>
+      <div>このフォルダは空です。「＋ 画像を追加」やクリップボードからの貼り付け(Ctrl+V)で追加できます。</div>
+    </div>
+  </section>
+
+  <section id="boardView" class="view">
+    <div id="boardCanvas"></div>
+    <div id="boardEmpty" class="board-empty">
+      <div>このボードには画像がありません。<br>ギャラリーで選択して送るか、Ctrl+Vで貼り付け追加できます。</div>
+    </div>
+    <div class="board-toolbar">
+      <button class="btn" onclick="App.boardFit()">画面に合わせる</button>
+      <button class="btn" onclick="App.boardZoom(1.2)">＋</button>
+      <button class="btn" onclick="App.boardZoom(1/1.2)">－</button>
+    </div>
+  </section>
+</main>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>コメント編集</h3>
+      <button class="btn" onclick="App.addBubbleCenter()">＋ 吹き出しを追加</button>
+      <button class="btn primary" onclick="App.closeModal()">完了</button>
+    </div>
+    <div class="modal-body">
+      <div class="editor-stage" id="editorStage">
+        <img id="editorImg" src="" alt="">
+      </div>
+    </div>
+    <div class="modal-foot">
+      画像クリックで吹き出し追加 / 吹き出し本体をドラッグで移動・タップで文字入力・✕で削除 / 尻尾の先端をドラッグで向き・長さを調整
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+const SVGNS="http://www.w3.org/2000/svg";
+const DB_NAME="refnest", DB_VER=1;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+let state={ images:[],folders:[],boards:[],currentBoardId:null,currentFolderId:null,currentView:"gallery" };
+let selected=new Set();
+let editingImageId=null;
+let objURLs={};
+let db=null;
+
+// ============ IndexedDB ============
+function openDB(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(DB_NAME,DB_VER);
+    r.onupgradeneeded=()=>{ const d=r.result;
+      if(!d.objectStoreNames.contains("app")) d.createObjectStore("app");
+      if(!d.objectStoreNames.contains("blobs")) d.createObjectStore("blobs");
+    };
+    r.onsuccess=()=>{ db=r.result; res(db); };
+    r.onerror=()=>rej(r.error);
+  });
+}
+function idbGet(store,key){ return new Promise((res,rej)=>{ const rq=db.transaction(store).objectStore(store).get(key); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
+function idbPut(store,key,val){ return new Promise((res,rej)=>{ const t=db.transaction(store,"readwrite"); t.objectStore(store).put(val,key); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); }); }
+function idbDel(store,key){ return new Promise((res,rej)=>{ const t=db.transaction(store,"readwrite"); t.objectStore(store).delete(key); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); }); }
+function idbClear(store){ return new Promise((res,rej)=>{ const t=db.transaction(store,"readwrite"); t.objectStore(store).clear(); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); }); }
+
+function serial(){ return {folders:state.folders,boards:state.boards,currentBoardId:state.currentBoardId,
+  currentFolderId:state.currentFolderId,currentView:state.currentView,images:state.images}; }
+function _persist(){ if(!db) return Promise.resolve();
+  return idbPut("app","state",serial()).catch(e=>{ console.error(e); toast("保存に失敗しました"); }); }
+let pTimer;
+function save(){ clearTimeout(pTimer); pTimer=setTimeout(_persist,250); }
+
+function srcOf(id){ return objURLs[id]||""; }
+function imgSize(url){ return new Promise(res=>{ const i=new Image();
+  i.onload=()=>res({w:i.naturalWidth||1,h:i.naturalHeight||1}); i.onerror=()=>res({w:1,h:1}); i.src=url; }); }
+
+// ============ normalize / load ============
+function normalize(){
+  state.folders=state.folders||[]; state.images=state.images||[]; state.boards=state.boards||[];
+  state.images.forEach(im=>{ if(im.folderId===undefined) im.folderId=null; if(!im.w)im.w=1; if(!im.h)im.h=1;
+    im.comments=im.comments||[]; im.comments.forEach(c=>{ if(c.tx===undefined)c.tx=0; if(c.ty===undefined)c.ty=8; }); });
+  if(!state.boards.length) state.boards.push(newBoardObj("ボード 1"));
+  state.boards.forEach(b=>{ b.items=b.items||[]; if(!b.camera)b.camera={x:0,y:0,zoom:1};
+    b.items.forEach(it=>{ if(it.flipH===undefined)it.flipH=false; if(it.flipV===undefined)it.flipV=false; if(!it.scale)it.scale=1; }); });
+  if(!state.currentBoardId||!state.boards.find(b=>b.id===state.currentBoardId)) state.currentBoardId=state.boards[0].id;
+  if(state.currentFolderId&&!state.folders.find(f=>f.id===state.currentFolderId)) state.currentFolderId=null;
+}
+function initDefaults(){
+  state={ images:[],folders:[],boards:[newBoardObj("ボード 1")],currentBoardId:null,currentFolderId:null,currentView:"gallery" };
+  state.currentBoardId=state.boards[0].id;
+}
+async function migrateFromLS(){
+  const raw=localStorage.getItem("illustRefApp.v2")||localStorage.getItem("illustRefApp.v1");
+  if(!raw) return false;
+  let old; try{ old=JSON.parse(raw); }catch(_){ return false; }
+  state.folders=old.folders||[]; state.boards=old.boards||[];
+  state.currentBoardId=old.currentBoardId||null; state.currentFolderId=old.currentFolderId||null;
+  state.currentView=old.currentView||"gallery"; state.images=[];
+  for(const im of (old.images||[])){
+    try{
+      if(!im.src) continue;
+      const blob=await (await fetch(im.src)).blob();
+      await idbPut("blobs",im.id,blob);
+      const tmp=URL.createObjectURL(blob); const sz=await imgSize(tmp); URL.revokeObjectURL(tmp);
+      state.images.push({ id:im.id, name:im.name, folderId:(im.folderId==null?null:im.folderId), w:sz.w, h:sz.h,
+        comments:(im.comments||[]).map(c=>({id:c.id||uid(),x:c.x,y:c.y,text:c.text||"",tx:c.tx||0,ty:(c.ty===undefined?8:c.ty)})) });
+    }catch(e){ console.warn("migrate image failed",e); }
+  }
+  normalize(); await _persist();
+  toast("既存データをIndexedDBへ移行しました");
+  return true;
+}
+async function init(){
+  try{ await openDB(); }catch(e){ console.error(e); toast("DB初期化に失敗しました"); initDefaults(); afterLoad(); return; }
+  const saved=await idbGet("app","state");
+  if(saved){ Object.assign(state,saved); normalize(); }
+  else { const migrated=await migrateFromLS(); if(!migrated){ initDefaults(); normalize(); } }
+  for(const im of state.images){
+    try{ const blob=await idbGet("blobs",im.id); if(blob) objURLs[im.id]=URL.createObjectURL(blob); }catch(_){}
+  }
+  afterLoad();
+}
+function afterLoad(){
+  setView(state.currentView||"gallery");
+  document.getElementById("editorStage").addEventListener("click",onStageClick);
+  document.getElementById("modalBg").addEventListener("click",e=>{ if(e.target.id==="modalBg") closeModal(); });
+  window.addEventListener("paste",onPaste);
+  // re-render once handwriting webfont has loaded (text metrics change -> bubble shape)
+  if(document.fonts&&document.fonts.ready){
+    document.fonts.ready.then(()=>{
+      if(state.currentView==="gallery") renderGallery();
+      if(document.getElementById("modalBg").classList.contains("open")) renderEditorBubbles();
+    });
+  }
+}
+
+let toastTimer;
+function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2200); }
+function newBoardObj(name){ return {id:uid(),name,camera:{x:0,y:0,zoom:1},items:[]}; }
+function curBoard(){ return state.boards.find(b=>b.id===state.currentBoardId); }
+function imgById(id){ return state.images.find(i=>i.id===id); }
+function folderById(id){ return state.folders.find(f=>f.id===id); }
+
+// ============ VIEW / HEADER ============
+// Gallery and Board are fully isolated render layers. On every switch we wipe the
+// OTHER layer's dynamic DOM so gallery-only UI (selection badges, comment bubbles /
+// icons) can never bleed into the board, and vice-versa.
+function setView(v){
+  state.currentView=v; save();
+  document.getElementById("galleryView").classList.toggle("active",v==="gallery");
+  document.getElementById("boardView").classList.toggle("active",v==="board");
+  document.getElementById("tabGallery").classList.toggle("active",v==="gallery");
+  document.getElementById("tabBoard").classList.toggle("active",v==="board");
+  document.getElementById("galCtrls").style.display=v==="gallery"?"flex":"none";
+  document.getElementById("boardCtrls").style.display=v==="board"?"flex":"none";
+  if(v==="board"){
+    document.getElementById("galGrid").innerHTML="";   // drop all gallery cards/badges/bubbles
+    document.getElementById("crumbs").innerHTML="";
+    renderBoardSelect(); renderBoard();
+  } else {
+    document.getElementById("boardCanvas").innerHTML=""; // drop all board items
+    boardSelItem=null;
+    renderGallery();
+  }
+}
+function toggleHeader(){ document.body.classList.toggle("header-hidden"); }
+
+// ============ ADD / UPLOAD / PASTE (Blob based) ============
+async function addImageFromBlob(blob,name){
+  const id=uid();
+  await idbPut("blobs",id,blob);
+  const url=URL.createObjectURL(blob); objURLs[id]=url;
+  const sz=await imgSize(url);
+  const im={ id,name:name||"image.png",
+    folderId:(state.currentView==="gallery"?state.currentFolderId:null), w:sz.w,h:sz.h,comments:[] };
+  state.images.push(im); await _persist();
+  return im;
+}
+async function onUpload(e){
+  const files=[...e.target.files]; e.target.value="";
+  if(!files.length) return;
+  let n=0;
+  for(const f of files){ if(!f.type.startsWith("image/")) continue; await addImageFromBlob(f,f.name); n++; }
+  renderGallery(); if(n) toast(n+"枚追加しました");
+}
+function onPaste(e){
+  const items=e.clipboardData&&e.clipboardData.items; if(!items) return;
+  const imgs=[...items].filter(it=>it.type.startsWith("image/"));
+  if(!imgs.length) return;
+  e.preventDefault();
+  (async()=>{
+    let n=0;
+    for(const it of imgs){ const f=it.getAsFile(); if(!f) continue;
+      const im=await addImageFromBlob(f,"clipboard-"+Date.now()+".png");
+      if(state.currentView==="board") placeOnBoardCenter(im.id);
+      n++; }
+    if(!n) return;
+    save();
+    state.currentView==="board"?renderBoard():renderGallery();
+    toast("貼り付けました");
+  })();
+}
+
+// ============ FOLDERS ============
+function newFolder(){
+  const name=prompt("フォルダ名","新しいフォルダ"); if(name===null) return;
+  state.folders.push({id:uid(),name:name.trim()||"新しいフォルダ",parentId:state.currentFolderId});
+  save(); renderGallery();
+}
+function openFolder(id){ state.currentFolderId=id; save(); renderGallery(); }
+function renameFolder(id){ const f=folderById(id); const n=prompt("フォルダ名を変更",f.name); if(n===null) return;
+  f.name=n.trim()||f.name; save(); renderGallery(); }
+function deleteFolder(id){
+  const f=folderById(id);
+  if(!confirm("フォルダ「"+f.name+"」を削除します。中身は親フォルダに移動します。")) return;
+  state.images.forEach(im=>{ if(im.folderId===id) im.folderId=f.parentId; });
+  state.folders.forEach(sf=>{ if(sf.parentId===id) sf.parentId=f.parentId; });
+  state.folders=state.folders.filter(x=>x.id!==id);
+  save(); renderGallery();
+}
+function isDescendant(folderId,maybeAncestorId){
+  let cur=folderById(folderId);
+  while(cur){ if(cur.parentId===maybeAncestorId) return true; cur=folderById(cur.parentId); }
+  return false;
+}
+function moveInto(payload,targetFolderId){
+  if(payload.type==="image"){ const im=imgById(payload.id); if(im) im.folderId=targetFolderId; }
+  else if(payload.type==="folder"){
+    if(payload.id===targetFolderId) return;
+    if(targetFolderId&&isDescendant(targetFolderId,payload.id)){ toast("フォルダを自身の中へは移動できません"); return; }
+    const f=folderById(payload.id); if(f) f.parentId=targetFolderId;
+  }
+  save(); renderGallery();
+}
+
+// ============ GALLERY RENDER ============
+function folderPath(id){ const p=[]; let c=folderById(id); while(c){ p.unshift(c); c=folderById(c.parentId);} return p; }
+function renderCrumbs(){
+  const c=document.getElementById("crumbs"); c.innerHTML="";
+  const mk=(label,fid)=>{
+    const el=document.createElement("div"); el.className="crumb"; el.textContent=label;
+    el.onclick=()=>openFolder(fid);
+    el.ondragover=e=>{e.preventDefault();el.classList.add("drop");};
+    el.ondragleave=()=>el.classList.remove("drop");
+    el.ondrop=e=>{e.preventDefault();el.classList.remove("drop");handleDrop(e,fid);};
+    return el;
+  };
+  c.appendChild(mk("🏠 すべて",null));
+  folderPath(state.currentFolderId).forEach(f=>{
+    const s=document.createElement("span"); s.className="crumb-sep"; s.textContent="›"; c.appendChild(s);
+    c.appendChild(mk("📁 "+f.name,f.id));
+  });
+}
+function handleDrop(e,targetFolderId){ try{ const p=JSON.parse(e.dataTransfer.getData("text/plain")); moveInto(p,targetFolderId); }catch(_){} }
+function renderGallery(){
+  renderCrumbs();
+  const grid=document.getElementById("galGrid"); const empty=document.getElementById("galEmpty"); grid.innerHTML="";
+  const subFolders=state.folders.filter(f=>(f.parentId||null)===(state.currentFolderId||null));
+  const imgs=state.images.filter(im=>(im.folderId||null)===(state.currentFolderId||null));
+  empty.style.display=(subFolders.length||imgs.length)?"none":"block";
+
+  subFolders.forEach(f=>{
+    const count=state.images.filter(im=>im.folderId===f.id).length + state.folders.filter(x=>x.parentId===f.id).length;
+    const card=document.createElement("div"); card.className="folder-card"; card.draggable=true;
+    card.ondragstart=e=>e.dataTransfer.setData("text/plain",JSON.stringify({type:"folder",id:f.id}));
+    card.ondragover=e=>{e.preventDefault();card.classList.add("drop");};
+    card.ondragleave=()=>card.classList.remove("drop");
+    card.ondrop=e=>{e.preventDefault();card.classList.remove("drop");handleDrop(e,f.id);};
+    card.onclick=()=>openFolder(f.id);
+    const ic=document.createElement("div"); ic.className="ficon"; ic.textContent="📁";
+    const meta=document.createElement("div"); meta.className="fmeta";
+    const nm=document.createElement("div"); nm.className="fname"; nm.textContent=f.name+" ("+count+")"; nm.title=f.name;
+    const rn=document.createElement("button"); rn.className="iconbtn"; rn.textContent="✏️";
+    rn.onclick=e=>{e.stopPropagation();renameFolder(f.id);};
+    const dl=document.createElement("button"); dl.className="iconbtn del"; dl.textContent="🗑";
+    dl.onclick=e=>{e.stopPropagation();deleteFolder(f.id);};
+    meta.appendChild(nm); meta.appendChild(rn); meta.appendChild(dl);
+    card.appendChild(ic); card.appendChild(meta); grid.appendChild(card);
+  });
+
+  imgs.forEach(img=>{
+    const card=document.createElement("div"); card.className="card"+(selected.has(img.id)?" selected":""); card.draggable=true;
+    card.ondragstart=e=>{ e.dataTransfer.setData("text/plain",JSON.stringify({type:"image",id:img.id})); card.classList.add("dragging"); };
+    card.ondragend=()=>card.classList.remove("dragging");
+    const order=[...selected].indexOf(img.id)+1;
+    const wrap=document.createElement("div"); wrap.className="imgwrap"; wrap.onclick=()=>toggleSelect(img.id);
+    const im=document.createElement("img"); im.src=srcOf(img.id); im.alt=img.name; wrap.appendChild(im);
+    renderBubbles(wrap,img,{mode:"mini"});
+    const badge=document.createElement("div"); badge.className="badge"; badge.textContent=order; wrap.appendChild(badge);
+    if(img.comments.length){ const cc=document.createElement("div"); cc.className="cmt-count"; cc.textContent="💬 "+img.comments.length; wrap.appendChild(cc); }
+    card.appendChild(wrap);
+    const meta=document.createElement("div"); meta.className="meta";
+    const nm=document.createElement("div"); nm.className="name"; nm.textContent=img.name; nm.title=img.name;
+    const eb=document.createElement("button"); eb.className="iconbtn"; eb.textContent="💬"; eb.title="コメント編集"; eb.onclick=ev=>{ev.stopPropagation();openEditor(img.id);};
+    const db2=document.createElement("button"); db2.className="iconbtn del"; db2.textContent="🗑"; db2.onclick=ev=>{ev.stopPropagation();deleteImage(img.id);};
+    meta.appendChild(nm); meta.appendChild(eb); meta.appendChild(db2);
+    card.appendChild(meta); grid.appendChild(card);
+  });
+  updateSelInfo();
+}
+function toggleSelect(id){ selected.has(id)?selected.delete(id):selected.add(id); renderGallery(); }
+function clearSelection(){ selected.clear(); renderGallery(); }
+function updateSelInfo(){
+  document.getElementById("selInfo").textContent=selected.size+"枚選択中";
+  document.getElementById("openBoardBtn").disabled=selected.size===0;
+}
+async function deleteImage(id){
+  if(!confirm("この画像を削除しますか？ボード上の配置も削除されます。")) return;
+  state.images=state.images.filter(i=>i.id!==id); selected.delete(id);
+  state.boards.forEach(b=> b.items=b.items.filter(it=>it.imageId!==id));
+  if(objURLs[id]){ URL.revokeObjectURL(objURLs[id]); delete objURLs[id]; }
+  try{ await idbDel("blobs",id); }catch(_){}
+  await _persist(); renderGallery();
+}
+
+// ============ SPEECH BUBBLES (hexagon + integrated tail, hand-drawn) ============
+// Single SVG path = body (corner-cut hexagon/octagon) + variable-direction tail, roughened by #rnRough filter.
+function bubblePath(left,top,right,bottom,tipX,tipY,cut,baseHalf){
+  const cx=(left+right)/2;
+  cut=Math.max(4,Math.min(cut,(right-left)/2-2,(bottom-top)/2-2));
+  baseHalf=Math.min(baseHalf,(right-left)/2-cut-2); if(!(baseHalf>=3)) baseHalf=3;
+  const p=[
+    [left+cut,top],[right-cut,top],[right,top+cut],[right,bottom-cut],
+    [right-cut,bottom],[cx+baseHalf,bottom],[tipX,tipY],[cx-baseHalf,bottom],
+    [left+cut,bottom],[left,bottom-cut],[left,top+cut]
+  ];
+  return "M"+p.map(q=>q[0].toFixed(1)+","+q[1].toFixed(1)).join(" L")+" Z";
+}
+function positionTipEl(tip,c){ tip.style.left=(c.x+(c.tx||0))+"%"; tip.style.top=(c.y+(c.ty===undefined?8:c.ty))+"%"; }
+function positionTip(container,c){ const t=container.querySelector('.tip-handle[data-cid="'+c.id+'"]'); if(t) positionTipEl(t,c); }
+
+// mode: "edit" | "mini"
+function renderBubbles(container,img,opt){
+  container.querySelectorAll(".bub-shape,.hbub,.tip-handle").forEach(n=>n.remove());
+  if(!img.comments.length) return;
+  const rect=container.getBoundingClientRect();
+  const W=rect.width||1, H=rect.height||1;
+  const svg=document.createElementNS(SVGNS,"svg");
+  svg.setAttribute("class","bub-shape"); svg.setAttribute("viewBox","0 0 "+W+" "+H); svg.setAttribute("preserveAspectRatio","none");
+  container.appendChild(svg);
+
+  img.comments.forEach(c=>{
+    const el=document.createElement("div"); el.className="hbub"+(opt.mode==="mini"?" mini":"");
+    el.dataset.cid=c.id; el.style.left=c.x+"%"; el.style.top=c.y+"%";
+    const txt=document.createElement("div"); txt.className="hbub-text";
+    if(opt.mode==="edit"){ txt.contentEditable="false"; txt.spellcheck=false; if(!c.text) txt.classList.add("empty"); }
+    txt.textContent=c.text||"";
+    el.appendChild(txt);
+
+    const path=document.createElementNS(SVGNS,"path");
+    path.setAttribute("fill","rgba(20,23,30,0.9)");
+    path.setAttribute("stroke","rgba(255,255,255,0.16)");
+    path.setAttribute("stroke-width","1.4");
+    path.setAttribute("vector-effect","non-scaling-stroke");
+    path.setAttribute("filter","url(#rnRough)");
+    path.dataset.cid=c.id;
+    svg.appendChild(path);
+    container.appendChild(el);
+
+    const rebuild=()=>{
+      const ax=c.x/100*W, ay=c.y/100*H;
+      const BW=el.offsetWidth, BH=el.offsetHeight;
+      const left=ax-BW/2, right=ax+BW/2, top=ay-BH, bottom=ay;
+      const tipX=ax+(c.tx||0)/100*W, tipY=ay+(c.ty===undefined?12:c.ty)/100*H;
+      // big diagonal corner cuts + a thick, prominent tail
+      const cut=Math.max(13,Math.min(30,Math.min(BW,BH)*0.26));
+      const baseHalf=Math.max(18,Math.min(44,BW*0.24));
+      path.setAttribute("d", bubblePath(left,top,right,bottom,tipX,tipY,cut,baseHalf));
+    };
+    rebuild();
+
+    if(opt.mode==="edit"){
+      txt.addEventListener("input",()=>{ c.text=txt.innerText.replace(/\n$/,""); txt.classList.toggle("empty",!txt.textContent.trim()); rebuild(); save(); });
+      txt.addEventListener("blur",()=>{ txt.contentEditable="false"; txt.classList.toggle("empty",!txt.textContent.trim()); save(); });
+
+      // No visible move handle: drag the bubble BODY to move it, tap (no drag) to edit text.
+      txt.addEventListener("pointerdown",e=>{
+        e.stopPropagation();
+        if(txt.isContentEditable) return;                 // already editing -> normal caret/selection
+        e.preventDefault();
+        const sx=e.clientX, sy=e.clientY; let moving=false;
+        const move=ev=>{
+          if(!moving && Math.hypot(ev.clientX-sx,ev.clientY-sy)>6) moving=true;
+          if(moving){
+            c.x=Math.max(0,Math.min(100,(ev.clientX-rect.left)/W*100));
+            c.y=Math.max(0,Math.min(100,(ev.clientY-rect.top)/H*100));
+            el.style.left=c.x+"%"; el.style.top=c.y+"%"; rebuild(); positionTip(container,c);
+          }
+        };
+        const up=()=>{
+          document.removeEventListener("pointermove",move); document.removeEventListener("pointerup",up);
+          if(moving){ save(); }
+          else { // tap -> enter text edit mode
+            txt.contentEditable="true"; txt.classList.remove("empty"); txt.focus();
+            try{ const r=document.createRange(); r.selectNodeContents(txt); r.collapse(false); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r); }catch(_){}
+          }
+        };
+        document.addEventListener("pointermove",move); document.addEventListener("pointerup",up);
+      });
+
+      const del=document.createElement("div"); del.className="hbub-del"; del.textContent="✕"; del.title="削除";
+      del.addEventListener("pointerdown",e=>e.stopPropagation());
+      del.addEventListener("click",e=>{ e.stopPropagation(); img.comments=img.comments.filter(x=>x.id!==c.id); save(); renderEditorBubbles(); });
+      el.appendChild(del);
+
+      // Tail tip control is kept (drag the tail tip to change direction/length) but the handle is invisible.
+      const tip=document.createElement("div"); tip.className="tip-handle"; tip.dataset.cid=c.id; positionTipEl(tip,c);
+      tip.addEventListener("pointerdown",e=>{ e.stopPropagation(); e.preventDefault();
+        const move=ev=>{ const px=(ev.clientX-rect.left)/W*100, py=(ev.clientY-rect.top)/H*100; c.tx=px-c.x; c.ty=py-c.y; positionTipEl(tip,c); rebuild(); };
+        const up=()=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);save();};
+        document.addEventListener("pointermove",move); document.addEventListener("pointerup",up);
+      });
+      container.appendChild(tip);
+    }
+  });
+}
+
+// ============ EDITOR ============
+function openEditor(id){
+  editingImageId=id; const ei=document.getElementById("editorImg");
+  ei.onload=()=>renderEditorBubbles(); ei.src=srcOf(id);
+  if(ei.complete&&ei.src) renderEditorBubbles();
+  document.getElementById("modalBg").classList.add("open");
+}
+function renderEditorBubbles(){ const img=imgById(editingImageId); if(img) renderBubbles(document.getElementById("editorStage"),img,{mode:"edit"}); }
+function addBubbleCenter(){ const img=imgById(editingImageId); if(!img) return;
+  const c={id:uid(),x:50,y:50,text:"",tx:0,ty:12}; img.comments.push(c); save(); renderEditorBubbles(); focusBubble(c.id); }
+function focusBubble(cid){ const el=document.querySelector('.hbub[data-cid="'+cid+'"] .hbub-text'); if(el) el.focus(); }
+function closeModal(){ document.getElementById("modalBg").classList.remove("open"); editingImageId=null; renderGallery(); }
+function onStageClick(e){
+  if(e.target.id!=="editorImg") return;
+  const img=imgById(editingImageId); if(!img) return;
+  const r=e.currentTarget.getBoundingClientRect();
+  const c={id:uid(),x:(e.clientX-r.left)/r.width*100,y:(e.clientY-r.top)/r.height*100,text:"",tx:0,ty:12};
+  img.comments.push(c); save(); renderEditorBubbles(); focusBubble(c.id);
+}
+
+// ============ OPEN IN BOARD ============
+function openSelectedInBoard(){
+  if(!selected.size){ toast("画像を選択してください"); return; }
+  const board=curBoard(); let placed=board.items.length; const cols=4,gap=40,bw=260; let added=0;
+  selected.forEach(id=>{
+    if(board.items.find(it=>it.imageId===id)) return;
+    const idx=placed+added, col=idx%cols, row=Math.floor(idx/cols);
+    board.items.push({imageId:id,x:col*(bw+gap)+gap,y:row*(bw+gap)+gap,scale:1,flipH:false,flipV:false});
+    added++;
+  });
+  save(); toast(added>0?added+"枚をボードに追加":"すべて配置済みです"); setView("board");
+}
+
+// ============ BOARD (images only - comments are NOT shown here) ============
+function renderBoardSelect(){
+  const sel=document.getElementById("boardSelect"); sel.innerHTML="";
+  state.boards.forEach(b=>{ const o=document.createElement("option"); o.value=b.id;
+    o.textContent=b.name+" ("+b.items.length+")"; if(b.id===state.currentBoardId)o.selected=true; sel.appendChild(o); });
+}
+function switchBoard(id){ state.currentBoardId=id; boardSelItem=null; save(); renderBoard(); }
+function newBoard(){ const n=prompt("新しいボード名","ボード "+(state.boards.length+1)); if(n===null)return;
+  const b=newBoardObj(n.trim()||"ボード "+(state.boards.length+1)); state.boards.push(b); state.currentBoardId=b.id; boardSelItem=null; save(); renderBoardSelect(); renderBoard(); }
+function renameBoard(){ const b=curBoard(); const n=prompt("ボード名を変更",b.name); if(n===null)return; b.name=n.trim()||b.name; save(); renderBoardSelect(); }
+function deleteBoard(){ if(state.boards.length<=1){toast("最後のボードは削除できません");return;}
+  if(!confirm("このボードを削除しますか？"))return;
+  state.boards=state.boards.filter(b=>b.id!==state.currentBoardId); state.currentBoardId=state.boards[0].id; boardSelItem=null; save(); renderBoardSelect(); renderBoard(); }
+
+let boardSelItem=null;
+let touchCount=0;
+let pinchMode=null;
+let pinchPrev=0;
+function selectedItem(){ return boardSelItem==null?null:curBoard().items.find(x=>x.imageId===boardSelItem); }
+function itemDims(it){ const im=imgById(it.imageId); const w=260*it.scale; const ratio=(im&&im.w&&im.h)?im.h/im.w:1; return {w,h:w*ratio}; }
+function setSelected(id){ boardSelItem=id; [...document.querySelectorAll(".board-item")].forEach(n=>n.classList.toggle("sel",n.dataset.id===id)); }
+
+function renderBoard(){
+  const board=curBoard(); const canvas=document.getElementById("boardCanvas"); canvas.innerHTML="";
+  document.getElementById("boardEmpty").style.display=board.items.length?"none":"flex";
+  applyCamera();
+  board.items.forEach(it=>{
+    const img=imgById(it.imageId); if(!img) return;
+    const node=document.createElement("div");
+    node.className="board-item"+(boardSelItem===it.imageId?" sel":""); node.dataset.id=it.imageId;
+    positionItem(node,it);
+
+    const box=document.createElement("div"); box.className="img-box";
+    const im=document.createElement("img"); im.src=srcOf(it.imageId); im.alt=img.name; im.draggable=false;
+    im.style.transform="scale("+(it.flipH?-1:1)+","+(it.flipV?-1:1)+")"; box.appendChild(im); node.appendChild(box);
+
+    const tb=document.createElement("div"); tb.className="item-toolbar";
+    const fh=document.createElement("button"); fh.textContent="⇄ 左右反転"; fh.onpointerdown=e=>e.stopPropagation();
+    fh.onclick=e=>{e.stopPropagation();it.flipH=!it.flipH;save();renderBoard();};
+    const fv=document.createElement("button"); fv.textContent="⇅ 上下反転"; fv.onpointerdown=e=>e.stopPropagation();
+    fv.onclick=e=>{e.stopPropagation();it.flipV=!it.flipV;save();renderBoard();};
+    const fr=document.createElement("button"); fr.textContent="最前面"; fr.onpointerdown=e=>e.stopPropagation();
+    fr.onclick=e=>{e.stopPropagation();board.items=board.items.filter(x=>x!==it);board.items.push(it);save();renderBoard();};
+    const rm=document.createElement("button"); rm.textContent="外す"; rm.onpointerdown=e=>e.stopPropagation();
+    rm.onclick=e=>{e.stopPropagation();board.items=board.items.filter(x=>x!==it);boardSelItem=null;save();renderBoard();renderBoardSelect();};
+    [fh,fv,fr,rm].forEach(x=>tb.appendChild(x)); node.appendChild(tb);
+
+    const handle=document.createElement("div"); handle.className="handle"; node.appendChild(handle);
+    setupItemDrag(node,it,handle); canvas.appendChild(node);
+  });
+}
+function positionItem(node,it){ const d=itemDims(it); node.style.left=it.x+"px"; node.style.top=it.y+"px"; node.style.width=d.w+"px"; node.style.height=d.h+"px"; }
+function setupItemDrag(node,it,handle){
+  node.addEventListener("pointerdown",e=>{
+    if(e.target===handle||e.target.tagName==="BUTTON") return; e.stopPropagation();
+    setSelected(it.imageId);
+    const cam=curBoard().camera, sx=e.clientX, sy=e.clientY, ox=it.x, oy=it.y; let moved=false;
+    const move=ev=>{ if(touchCount>=2) return;
+      moved=true; it.x=ox+(ev.clientX-sx)/cam.zoom; it.y=oy+(ev.clientY-sy)/cam.zoom;
+      node.style.left=it.x+"px"; node.style.top=it.y+"px"; };
+    const up=()=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);if(moved)save();};
+    document.addEventListener("pointermove",move); document.addEventListener("pointerup",up);
+  });
+  handle.addEventListener("pointerdown",e=>{
+    e.stopPropagation(); const cam=curBoard().camera, sx=e.clientX, os=it.scale;
+    const move=ev=>{ const dw=(ev.clientX-sx)/cam.zoom; it.scale=Math.max(0.15,os+dw/260); positionItem(node,it); };
+    const up=()=>{document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);save();};
+    document.addEventListener("pointermove",move); document.addEventListener("pointerup",up);
+  });
+}
+function applyCamera(){ const c=curBoard().camera; document.getElementById("boardCanvas").style.transform="translate("+c.x+"px,"+c.y+"px) scale("+c.zoom+")"; }
+function placeOnBoardCenter(imageId){
+  const board=curBoard(), cam=board.camera, rect=boardView.getBoundingClientRect();
+  const cx=(rect.width/2-cam.x)/cam.zoom, cy=(rect.height/2-cam.y)/cam.zoom;
+  const im=imgById(imageId); const w=260; const h=w*((im&&im.w&&im.h)?im.h/im.w:1);
+  board.items.push({imageId,x:cx-w/2,y:cy-h/2,scale:1,flipH:false,flipV:false});
+}
+
+const boardView=document.getElementById("boardView");
+boardView.addEventListener("pointerdown",e=>{
+  if(e.target.id!=="boardView"&&e.target.id!=="boardCanvas"&&e.target.id!=="boardEmpty") return;
+  if(boardSelItem!==null){
+    const sx=e.clientX, sy=e.clientY; let moved=false;
+    const mv=ev=>{ if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>6) moved=true; };
+    const up=()=>{ document.removeEventListener("pointermove",mv); document.removeEventListener("pointerup",up);
+      if(!moved && touchCount<=1){ boardSelItem=null; renderBoard(); } };
+    document.addEventListener("pointermove",mv); document.addEventListener("pointerup",up);
+    return;
+  }
+  boardView.classList.add("panning"); const cam=curBoard().camera, sx=e.clientX, sy=e.clientY, ox=cam.x, oy=cam.y;
+  const move=ev=>{ if(touchCount>=2) return; cam.x=ox+(ev.clientX-sx); cam.y=oy+(ev.clientY-sy); applyCamera(); };
+  const up=()=>{boardView.classList.remove("panning");document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",up);save();};
+  document.addEventListener("pointermove",move); document.addEventListener("pointerup",up);
+});
+boardView.addEventListener("wheel",e=>{ e.preventDefault(); const r=boardView.getBoundingClientRect();
+  zoomAt(e.clientX-r.left,e.clientY-r.top,e.deltaY<0?1.12:1/1.12); },{passive:false});
+function zoomAt(mx,my,factor){ const cam=curBoard().camera; const nz=Math.max(0.1,Math.min(8,cam.zoom*factor));
+  const k=nz/cam.zoom; cam.x=mx-(mx-cam.x)*k; cam.y=my-(my-cam.y)*k; cam.zoom=nz; applyCamera(); save(); }
+function boardZoom(f){ const r=boardView.getBoundingClientRect(); zoomAt(r.width/2,r.height/2,f); }
+
+boardView.addEventListener("touchstart",e=>{
+  touchCount=e.touches.length;
+  if(e.touches.length===2){ pinchPrev=dist(e.touches); pinchMode=(boardSelItem!==null)?"item":"canvas"; }
+},{passive:false});
+boardView.addEventListener("touchmove",e=>{
+  if(e.touches.length===2 && pinchPrev){
+    e.preventDefault();
+    const nd=dist(e.touches); const ratio=nd/pinchPrev; pinchPrev=nd;
+    if(pinchMode==="item"){
+      const it=selectedItem();
+      if(it){ it.scale=Math.max(0.12,Math.min(14,it.scale*ratio));
+        const node=document.querySelector('.board-item[data-id="'+boardSelItem+'"]'); if(node) positionItem(node,it); }
+    }else{
+      const r=boardView.getBoundingClientRect();
+      const mx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left, my=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top;
+      zoomAt(mx,my,ratio);
+    }
+  }
+},{passive:false});
+boardView.addEventListener("touchend",e=>{
+  touchCount=e.touches.length;
+  if(e.touches.length<2){ if(pinchPrev && pinchMode==="item") save(); pinchPrev=0; pinchMode=null; }
+});
+function dist(t){ return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY); }
+
+function boardFit(){
+  const b=curBoard(); if(!b.items.length){ b.camera={x:40,y:40,zoom:1}; applyCamera(); save(); return; }
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  b.items.forEach(it=>{ const d=itemDims(it); minX=Math.min(minX,it.x); minY=Math.min(minY,it.y); maxX=Math.max(maxX,it.x+d.w); maxY=Math.max(maxY,it.y+d.h); });
+  const r=boardView.getBoundingClientRect(), pad=60;
+  const z=Math.min((r.width-pad*2)/(maxX-minX),(r.height-pad*2)/(maxY-minY),3);
+  b.camera.zoom=Math.max(0.1,z); b.camera.x=pad-minX*b.camera.zoom; b.camera.y=pad-minY*b.camera.zoom; applyCamera(); save();
+}
+
+// ============ RESET ============
+async function resetAll(){
+  if(!confirm("すべてのデータ（画像・フォルダ・コメント・ボード）を削除します。よろしいですか？")) return;
+  Object.values(objURLs).forEach(u=>{ try{URL.revokeObjectURL(u);}catch(_){} }); objURLs={};
+  try{ await idbClear("blobs"); await idbDel("app","state"); }catch(_){}
+  localStorage.removeItem("illustRefApp.v1"); localStorage.removeItem("illustRefApp.v2");
+  initDefaults(); selected.clear(); boardSelItem=null; await _persist(); setView("gallery"); toast("初期化しました");
+}
+
+window.App={ setView,toggleHeader,onUpload,newFolder,clearSelection,openSelectedInBoard,openEditor,
+  addBubbleCenter,closeModal,switchBoard,newBoard,renameBoard,deleteBoard,boardFit,boardZoom,resetAll };
+
+// ============ PWA service worker ============
+if("serviceWorker" in navigator && location.protocol!=="file:"){
+  window.addEventListener("load",()=>{ navigator.serviceWorker.register("service-worker.js").catch(e=>console.warn("SW register failed",e)); });
+}
+
+init();
+})();
+</script>
+</body>
+</html>
